@@ -34,8 +34,13 @@ where
     Chil: MatchNestedRoutes + Send + Clone + 'static,
     L: Locale,
 {
-    let routes =
-        crate::routing::i18n_routing::<L, View, Chil>(base_path, children, ssr, view, prefix_default);
+    let routes = crate::routing::i18n_routing::<L, View, Chil>(
+        base_path,
+        children,
+        ssr,
+        view,
+        prefix_default,
+    );
     #[cfg(erase_components)]
     return routes.into_any_nested_route();
     #[cfg(not(erase_components))]
