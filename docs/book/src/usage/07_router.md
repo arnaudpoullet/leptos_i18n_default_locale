@@ -43,9 +43,31 @@ If a locale is found those ways and it is not the default locale, this will trig
 
 This means if you access `"/counter"` with the cookie set to `fr` (default being `en`), then you will be redirected to `"/fr/counter"`.
 
+## Prefixing the Default Locale
+
+By default the default locale is served *without* a prefix (`/`, `/counter`), while every other locale is prefixed (`/fr`, `/fr/counter`). If you would rather have *every* locale prefixed, including the default one, pass the `prefix_default` prop:
+
+```rust,ignore
+use leptos_i18n_router::{I18nRoute, PrefixDefault};
+
+view! {
+    <I18nRoute<Locale, _, _> view=Outlet prefix_default=PrefixDefault::Always>
+        <Route path=path!("") view=Home />
+        <Route path=path!("counter") view=Counter />
+    </I18nRoute<Locale, _, _>>
+}
+```
+
+`PrefixDefault` has two variants:
+
+- `PrefixDefault::Never` (the default): the default locale is unprefixed. With `en` as default, the generated routes are `/`, `/counter`, `/en`, `/en/counter`, `/fr`, `/fr/counter`.
+- `PrefixDefault::Always`: the default locale is prefixed like the others. The unprefixed routes are no longer generated, so the routes become `/en`, `/en/counter`, `/fr`, `/fr/counter`. Accessing an unprefixed URL such as `/counter` triggers a redirection to the prefixed form (`/en/counter`), which avoids duplicate-content URLs.
+
+The prop defaults to `PrefixDefault::Never`, so existing applications keep their current behavior without any change.
+
 ## Switching Locale
 
-Switching locale updates the prefix accordingly. Switching from `en` to `fr` will set the prefix to `fr`, but switching to the default locale will remove the locale prefix entirely.
+Switching locale updates the prefix accordingly. Switching from `en` to `fr` will set the prefix to `fr`, but switching to the default locale will remove the locale prefix entirely (unless `prefix_default=PrefixDefault::Always`, in which case the default locale keeps its prefix).
 
 ## State Keeping
 

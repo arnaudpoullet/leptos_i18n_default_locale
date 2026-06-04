@@ -22,6 +22,10 @@ pub fn I18nRoute<L, View, Chil>(
     #[prop(optional)]
     ssr: SsrMode,
     #[prop(optional)] _marker: PhantomData<L>,
+    /// Whether the default locale is prefixed. Defaults to `PrefixDefault::Never`
+    /// (back-compatible with current behavior).
+    #[prop(default = crate::PrefixDefault::Never)]
+    prefix_default: crate::PrefixDefault,
     /// `children` may be empty or include nested routes.
     children: RouteChildren<Chil>,
 ) -> impl MatchNestedRoutes + Clone
@@ -30,7 +34,8 @@ where
     Chil: MatchNestedRoutes + Send + Clone + 'static,
     L: Locale,
 {
-    let routes = crate::routing::i18n_routing::<L, View, Chil>(base_path, children, ssr, view);
+    let routes =
+        crate::routing::i18n_routing::<L, View, Chil>(base_path, children, ssr, view, prefix_default);
     #[cfg(erase_components)]
     return routes.into_any_nested_route();
     #[cfg(not(erase_components))]
