@@ -315,19 +315,16 @@ fn correct_locale_prefix_effect<L: Locale>(
 ) -> impl Fn(Option<()>) + 'static {
     let location = use_location();
     let navigate = use_navigate();
-    let cookie_locale = i18n.cookie_locale();
     move |_| {
         let path_locale = location
             .pathname
             .with(|path| get_locale_from_path::<L>(path, base_path));
         let current_locale = i18n.get_locale_untracked();
 
-        // Splash mode: a cookie-less visitor on an unprefixed URL stays put (we
-        // render the splash) instead of being navigated to a guessed locale.
-        if prefix_default == PrefixDefault::AlwaysSplash
-            && path_locale.is_none()
-            && cookie_locale.is_none()
-        {
+        // Splash mode: we never navigate away from an unprefixed URL on the
+        // client. The redirect for a returning visitor (cookie set) is done
+        // server-side in `maybe_redirect`.
+        if prefix_default == PrefixDefault::AlwaysSplash && path_locale.is_none() {
             return;
         }
 
