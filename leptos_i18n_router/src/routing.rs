@@ -240,6 +240,8 @@ fn get_new_path<L: Locale>(
             new_path.push_str(search);
         }
     });
+
+    #[cfg(not(feature = "ssr"))]
     location.hash.with_untracked(|hash| {
         if !hash.is_empty() {
             // Remove leading '#' if present
