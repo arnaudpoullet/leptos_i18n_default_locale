@@ -6,17 +6,7 @@
 mod components;
 mod routing;
 
-pub use components::I18nRoute;
-
-/// Whether the default locale gets a URL prefix like the others.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PrefixDefault {
-    /// Default locale is served unprefixed (`/path`). Current behavior.
-    #[default]
-    Never,
-    /// Every locale is prefixed, including the default (`/fr/path`).
-    Always,
-}
+pub use components::{I18nRoute, PrefixDefault};
 
 /// Create a localized path (one or more static segments) based on a locale.
 ///

@@ -45,7 +45,7 @@ This means if you access `"/counter"` with the cookie set to `fr` (default being
 
 ## Prefixing the Default Locale
 
-By default the default locale is served *without* a prefix (`/`, `/counter`), while every other locale is prefixed (`/fr`, `/fr/counter`). If you would rather have *every* locale prefixed, including the default one, pass the `prefix_default` prop:
+By default the default locale is served _without_ a prefix (`/`, `/counter`), while every other locale is prefixed (`/fr`, `/fr/counter`). If you would rather have _every_ locale prefixed, including the default one, pass the `prefix_default` prop:
 
 ```rust,ignore
 use leptos_i18n_router::{I18nRoute, PrefixDefault};
@@ -60,10 +60,10 @@ view! {
 
 `PrefixDefault` has two variants:
 
-- `PrefixDefault::Never` (the default): the default locale is unprefixed. With `en` as default, the generated routes are `/`, `/counter`, `/en`, `/en/counter`, `/fr`, `/fr/counter`.
-- `PrefixDefault::Always`: the default locale is prefixed like the others. The unprefixed routes are no longer generated, so the routes become `/en`, `/en/counter`, `/fr`, `/fr/counter`. Accessing an unprefixed URL such as `/counter` triggers a redirection to the prefixed form (`/en/counter`), which avoids duplicate-content URLs.
+- `PrefixDefault::Never` (the default): the default locale is served unprefixed. Path prefixed with the default locale (`/{def}/..`) will be redirected to the unprefixed one (`/..`) and emit a 301 status code on the server.
+- `PrefixDefault::Always`: the default locale is served prefixed like the others. Unprefixed paths (`/..`) redirects to a path prefixed with the resolved locale (`/{loc}/..`) and emit a 302 status code on the server.
 
-The prop defaults to `PrefixDefault::Never`, so existing applications keep their current behavior without any change.
+> note: The 301 redirect is only possible if you enabled the "axum"/"actix" feature on `leptos_i18n_router`, if not then a 302 redirect is emitted, as by default the server supplied redirect function only emits 302, so we need to patch it to emit 301.
 
 ## Switching Locale
 

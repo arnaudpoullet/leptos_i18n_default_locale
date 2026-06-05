@@ -201,15 +201,24 @@ fn get_new_path<L: Locale>(
             path_builder.push(new_locale.as_str());
         }
         if let Some(path_rest) = path_name.strip_prefix(base_path) {
-            let path_rest = match locale {
-                None => path_rest,
-                Some(l) => {
-                    if let Some(path_rest) = path_rest.strip_prefix(l.as_str()) {
-                        path_rest
-                    } else {
-                        path_rest // Should happen only if l == L::default()
-                    }
+            let l = locale.unwrap_or_default();
+            let locale_prix_stripped = path_rest.strip_prefix(l.as_str()).and_then(|path| {
+                if path.is_empty() {
+                    Some("")
+                } else {
+                    path.strip_prefix('/')
                 }
+            });
+            let path_rest = if let Some(path_rest) = locale_prix_stripped {
+                path_rest
+            } else if l == L::default() {
+                path_rest // Should happen only if l == L::default()
+            } else {
+                todo!(
+                    "expected the path to have a locale prefix of \"{}/..\" but got: \"{}\"",
+                    l.as_str(),
+                    path_rest
+                )
             };
 
             let old_locale_segments = segments.get(&locale.unwrap_or_default());
@@ -240,6 +249,7 @@ fn get_new_path<L: Locale>(
             new_path.push_str(search);
         }
     });
+
     location.hash.with_untracked(|hash| {
         if !hash.is_empty() {
             // Remove leading '#' if present
@@ -248,6 +258,7 @@ fn get_new_path<L: Locale>(
             new_path.push_str(hash);
         }
     });
+
     new_path
 }
 
@@ -388,17 +399,36 @@ fn maybe_redirect<L: Locale>(
     base_path: &str,
     segments: &RouteSegments<L>,
     prefix_default: PrefixDefault,
-) -> Option<String> {
-    let location = use_location();
+) -> Option<(String, bool)> {
     if cfg!(not(feature = "ssr")) {
         return None;
     }
-    // Under `Never`, a default-locale request is already at its canonical
-    // unprefixed URL, so no redirect is needed. Under `Always`, an unprefixed
-    // default-locale request must be redirected to its prefixed form.
-    if prefix_default == PrefixDefault::Never && previously_resolved_locale == L::default() {
-        return None;
+
+    let location = use_location();
+
+    let is_default = previously_resolved_locale == L::default();
+
+    // check the current default locale prefix to see if we need to redirect
+    if is_default {
+        let has_prefix = location.pathname.with_untracked(|path_name| {
+            let Some(rest) = path_name.strip_prefix(base_path) else {
+                return false;
+            };
+            let Some(rest) = rest.strip_prefix(previously_resolved_locale.as_str()) else {
+                return false;
+            };
+            rest.is_empty() || rest.starts_with('/')
+        });
+
+        if matches!(
+            (has_prefix, prefix_default),
+            // if already has a prefix and is ::Always, or if no prefix and is ::Never, we don't need to redirect
+            (true, PrefixDefault::Always) | (false, PrefixDefault::Never)
+        ) {
+            return None;
+        }
     }
+
     let new_path = get_new_path(
         &location,
         base_path,
@@ -407,7 +437,11 @@ fn maybe_redirect<L: Locale>(
         segments,
         prefix_default,
     );
-    Some(new_path)
+    Some((
+        new_path,
+        // permanently move "/{def}/.." to "/.." with prefix_default to never
+        is_default && prefix_default == PrefixDefault::Never,
+    ))
 }
 
 #[derive(Clone)]
@@ -449,11 +483,18 @@ where
     // By precedence if there is a locale prefix in the URL it takes priority.
     // if there is none, use the one computed beforehand.
 
-    let redir = if let Some(locale) = route_locale {
+    let redir = if let Some(locale) = route_locale
+        && locale != L::default()
+    {
         i18n.set_locale(locale);
         None
     } else {
-        maybe_redirect(previously_resolved_locale, base_path, &segments, prefix_default)
+        maybe_redirect(
+            previously_resolved_locale,
+            base_path,
+            &segments,
+            prefix_default,
+        )
     };
 
     // This variable is there to sync history changes, because we step out of the Leptos routes reactivity we don't get forward and backward history changes triggers
@@ -491,10 +532,45 @@ where
 
     match redir {
         None => Either::Left(view),
-        Some(path) => {
-            let view = move || view! { <Redirect path=path.clone() /> };
-            Either::Right(view)
+        Some((path, permanent)) => {
+            redirect(path.clone(), permanent);
+            Either::Right(())
         }
+    }
+}
+
+fn redirect(path: String, permanent_redirect: bool) {
+    fn redirect_via_comp(path: String) {
+        let props = leptos::component::component_props_builder(&Redirect)
+            .path(path)
+            .build();
+        Redirect(props)
+    }
+    if permanent_redirect && cfg!(any(feature = "actix", feature = "axum")) {
+        #[cfg(all(feature = "axum", not(feature = "actix")))]
+        {
+            if let Some(res) = use_context::<leptos_axum::ResponseOptions>() {
+                let path =
+                    axum_http::HeaderValue::from_str(&path).expect("failed to create header value");
+                res.insert_header(axum_http::header::LOCATION, path);
+                res.set_status(axum_http::StatusCode::MOVED_PERMANENTLY);
+            } else {
+                redirect_via_comp(path);
+            }
+        }
+        #[cfg(all(feature = "actix", not(feature = "axum")))]
+        {
+            if let Some(res) = use_context::<leptos_actix::ResponseOptions>() {
+                let path = actix_http::HeaderValue::from_str(&path)
+                    .expect("failed to create header value");
+                res.insert_header(actix_http::header::LOCATION, path);
+                res.set_status(actix_http::StatusCode::MOVED_PERMANENTLY);
+            } else {
+                redirect_via_comp(path);
+            }
+        }
+    } else {
+        redirect_via_comp(path);
     }
 }
 
