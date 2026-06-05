@@ -15,19 +15,7 @@ pub enum PrefixDefault {
     #[default]
     Never,
     /// Every locale is prefixed, including the default (`/fr/path`).
-    ///
-    /// An unprefixed request is redirected to the resolved locale's prefixed
-    /// URL, regardless of how that locale was resolved.
     Always,
-    /// Every locale is prefixed, but the unprefixed apex (and other unprefixed
-    /// paths) are *rendered* rather than redirected — letting you show a
-    /// language splash screen — **unless** the user has an explicit locale
-    /// cookie, in which case they are redirected to that locale's prefix.
-    ///
-    /// In other words: a first-time visitor with no cookie stays on the
-    /// unprefixed URL (show them a chooser); a returning visitor with a cookie
-    /// is sent to `/{their_locale}/…`.
-    AlwaysSplash,
 }
 
 /// Create a localized path (one or more static segments) based on a locale.

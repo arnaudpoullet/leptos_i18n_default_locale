@@ -197,7 +197,7 @@ fn get_new_path<L: Locale>(
     let mut new_path = location.pathname.with_untracked(|path_name| {
         let mut path_builder = PathBuilder::default();
         path_builder.push(base_path);
-        if new_locale != L::default() || prefix_default != PrefixDefault::Never {
+        if new_locale != L::default() || prefix_default == PrefixDefault::Always {
             path_builder.push(new_locale.as_str());
         }
         if let Some(path_rest) = path_name.strip_prefix(base_path) {
@@ -240,8 +240,6 @@ fn get_new_path<L: Locale>(
             new_path.push_str(search);
         }
     });
-
-    #[cfg(not(feature = "ssr"))]
     location.hash.with_untracked(|hash| {
         if !hash.is_empty() {
             // Remove leading '#' if present
@@ -323,13 +321,6 @@ fn correct_locale_prefix_effect<L: Locale>(
             .with(|path| get_locale_from_path::<L>(path, base_path));
         let current_locale = i18n.get_locale_untracked();
 
-        // Splash mode: we never navigate away from an unprefixed URL on the
-        // client. The redirect for a returning visitor (cookie set) is done
-        // server-side in `maybe_redirect`.
-        if prefix_default == PrefixDefault::AlwaysSplash && path_locale.is_none() {
-            return;
-        }
-
         if current_locale == path_locale.unwrap_or_default() {
             return;
         }
@@ -394,7 +385,6 @@ fn check_history_change<L: Locale>(
 
 fn maybe_redirect<L: Locale>(
     previously_resolved_locale: L,
-    cookie_locale: Option<L>,
     base_path: &str,
     segments: &RouteSegments<L>,
     prefix_default: PrefixDefault,
@@ -403,17 +393,10 @@ fn maybe_redirect<L: Locale>(
     if cfg!(not(feature = "ssr")) {
         return None;
     }
-    let should_redirect = match prefix_default {
-        // A default-locale request is already at its canonical unprefixed URL,
-        // so no redirect is needed; non-default locales get redirected.
-        PrefixDefault::Never => previously_resolved_locale != L::default(),
-        // Every unprefixed request is redirected to its prefixed form.
-        PrefixDefault::Always => true,
-        // Only redirect when the user has an explicit cookie preference;
-        // otherwise render the unprefixed view (e.g. a language splash screen).
-        PrefixDefault::AlwaysSplash => cookie_locale.is_some(),
-    };
-    if !should_redirect {
+    // Under `Never`, a default-locale request is already at its canonical
+    // unprefixed URL, so no redirect is needed. Under `Always`, an unprefixed
+    // default-locale request must be redirected to its prefixed form.
+    if prefix_default == PrefixDefault::Never && previously_resolved_locale == L::default() {
         return None;
     }
     let new_path = get_new_path(
@@ -462,7 +445,6 @@ where
     let i18n = use_i18n_context::<L>();
 
     let previously_resolved_locale = i18n.get_locale_untracked();
-    let cookie_locale = i18n.cookie_locale();
 
     // By precedence if there is a locale prefix in the URL it takes priority.
     // if there is none, use the one computed beforehand.
@@ -471,13 +453,7 @@ where
         i18n.set_locale(locale);
         None
     } else {
-        maybe_redirect(
-            previously_resolved_locale,
-            cookie_locale,
-            base_path,
-            &segments,
-            prefix_default,
-        )
+        maybe_redirect(previously_resolved_locale, base_path, &segments, prefix_default)
     };
 
     // This variable is there to sync history changes, because we step out of the Leptos routes reactivity we don't get forward and backward history changes triggers
@@ -727,12 +703,8 @@ where
         });
         // Under `Always`, the default locale is served prefixed like every other
         // locale (already generated below), so we must NOT also emit an unprefixed
-        // route for it — that would create duplicate-content URLs and unprefixed
-        // requests are redirected anyway.
-        // Under `Never` and `AlwaysSplash` the unprefixed routes are kept: `Never`
-        // serves the default locale there, and `AlwaysSplash` renders them (e.g. a
-        // language splash) for cookie-less visitors instead of redirecting.
-        let emit_default_locale_routes = self.prefix_default != PrefixDefault::Always;
+        // route for it — that would create duplicate-content URLs.
+        let emit_default_locale_routes = self.prefix_default == PrefixDefault::Never;
         let default_locale_routes = std::iter::once_with(move || {
             set_current_route_locale(L::default());
             MatchNestedRoutes::generate_routes(&self.route)

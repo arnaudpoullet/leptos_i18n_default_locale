@@ -23,13 +23,6 @@ pub use leptos_use::UseLocalesOptions;
 #[derive(Debug, Clone, Copy)]
 struct AnyLocale(&'static str);
 
-/// Snapshot of the locale found in the cookie when the context was initialized,
-/// provided as a context value so consumers (e.g. the router) can tell whether
-/// the user has an explicitly stored locale preference. `None` when the `cookie`
-/// feature is disabled or no cookie was set.
-#[derive(Debug, Clone, Copy)]
-struct CookieLocale<L>(Option<L>);
-
 /// This context is the heart of the i18n system:
 ///
 /// It servers as a signal to the current locale and enable reactivity to locale change.
@@ -82,20 +75,6 @@ impl<L: Locale, S: Scope<L>> I18nContext<L, S> {
         {
             self.locale_signal.get_untracked()
         }
-    }
-
-    /// Return the locale that was read from the cookie when this context was
-    /// initialized, if any.
-    ///
-    /// This reflects an explicitly stored user preference (as opposed to a
-    /// locale guessed from the `Accept-Language` header or the `navigator`
-    /// API). It is a snapshot taken at initialization, not a reactive value.
-    /// Returns `None` when the `cookie` feature is disabled or no cookie was
-    /// set.
-    #[inline]
-    #[track_caller]
-    pub fn cookie_locale(self) -> Option<L> {
-        use_context::<CookieLocale<L>>().and_then(|c| c.0)
     }
 
     /// Return the keys for the current locale subscribing to any changes
@@ -205,13 +184,9 @@ const COOKIE_PREFERED_LANG: &str = "i18n_pref_locale";
 
 #[track_caller]
 fn init_context_inner<L: Locale>(
-    cookie_locale: Option<L>,
     set_lang_cookie: WriteSignal<Option<L>>,
     initial_locale: Memo<L>,
 ) -> I18nContext<L> {
-    // Expose the cookie locale snapshot so consumers like the router can tell
-    // whether the user has an explicitly stored preference.
-    provide_context(CookieLocale(cookie_locale));
     #[cfg(feature = "unified_contexts")]
     let locale_signal = {
         let init_loc = AnyLocale(initial_locale.get_untracked().as_str());
@@ -294,10 +269,10 @@ pub fn init_i18n_context_with_options<L: Locale>(options: I18nContextOptions<L>)
         (lang_cookie.into(), set_lang_cookie)
     };
 
-    let cookie_locale = lang_cookie.get_untracked();
-    let initial_locale = fetch_locale::fetch_locale(cookie_locale, ssr_lang_header_getter);
+    let initial_locale =
+        fetch_locale::fetch_locale(lang_cookie.get_untracked(), ssr_lang_header_getter);
 
-    init_context_inner::<L>(cookie_locale, set_lang_cookie, initial_locale)
+    init_context_inner::<L>(set_lang_cookie, initial_locale)
 }
 
 /// Initialize a `I18nContext` without providing it.
@@ -376,8 +351,6 @@ fn init_subcontext_with_options<L: Locale>(
 
     let parent_locale = signal_maybe_once_then(parent_locale, fetch_locale_memo);
 
-    let cookie_locale = lang_cookie.get_untracked();
-
     let initial_locale_listener = Memo::new(move |prev_locale| {
         let initial_locale = initial_locale.get();
         let cookie = lang_cookie.get_untracked();
@@ -391,7 +364,7 @@ fn init_subcontext_with_options<L: Locale>(
         }
     });
 
-    init_context_inner::<L>(cookie_locale, set_lang_cookie, initial_locale_listener)
+    init_context_inner::<L>(set_lang_cookie, initial_locale_listener)
 }
 
 #[track_caller]

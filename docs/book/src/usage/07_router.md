@@ -58,45 +58,16 @@ view! {
 }
 ```
 
-`PrefixDefault` has three variants:
+`PrefixDefault` has two variants:
 
 - `PrefixDefault::Never` (the default): the default locale is unprefixed. With `en` as default, the generated routes are `/`, `/counter`, `/en`, `/en/counter`, `/fr`, `/fr/counter`.
 - `PrefixDefault::Always`: the default locale is prefixed like the others. The unprefixed routes are no longer generated, so the routes become `/en`, `/en/counter`, `/fr`, `/fr/counter`. Accessing an unprefixed URL such as `/counter` triggers a redirection to the prefixed form (`/en/counter`), which avoids duplicate-content URLs.
-- `PrefixDefault::AlwaysSplash`: like `Always`, every locale is prefixed (`/en`, `/fr`, …), **but** the unprefixed URLs are kept and *rendered* instead of being redirected — so you can show a language splash screen at the apex. The exception is when the visitor has an explicit locale cookie: they are redirected to `/{their_locale}/…`. See the next section.
 
 The prop defaults to `PrefixDefault::Never`, so existing applications keep their current behavior without any change.
 
-### Splash screen on the apex (`AlwaysSplash`)
-
-A common pattern is to show a language chooser on the apex domain for first-time visitors, while sending returning visitors straight to their preferred language. `PrefixDefault::AlwaysSplash` does exactly that:
-
-```rust,ignore
-use leptos_i18n_router::{I18nRoute, PrefixDefault};
-
-<I18nRoute<Locale, _, _> view=Outlet prefix_default=PrefixDefault::AlwaysSplash>
-    // Render a language chooser here for cookie-less visitors.
-    <Route path=path!("") view=LangSplash />
-    <Route path=path!("counter") view=Counter />
-</I18nRoute<Locale, _, _>>
-```
-
-The decision on an unprefixed URL is:
-
-- **A locale cookie is set** (the visitor previously chose a language): redirect to that locale's prefixed URL, e.g. `/` → `/fr`.
-- **No cookie**: render the unprefixed view as-is. The locale is *not* guessed-and-redirected from the `Accept-Language` header or `navigator`, so the visitor stays on the splash and can pick a language. Selecting one (via `i18n.set_locale(..)`) sets the cookie and navigates to the prefixed URL.
-
-The cookie redirect is performed **server-side only**, during SSR, as a real HTTP `302`, so a returning visitor is moved to `/{locale}/…` *before* the splash is ever rendered — no flash, no client-side "jump". The client never redirects away from an unprefixed URL on its own; this keeps the splash stable and avoids a jarring post-render navigation (in a CSR-only app there is no server redirect at all, so a cookie-holding visitor simply lands on the splash — redirect them yourself from the splash view if you need to).
-
-For the server-side redirect to fire, two things must be true:
-
-- The crate must actually be built for SSR: enable **`leptos_i18n_router/ssr`** in your server feature set (next to `leptos/ssr`, `leptos_router/ssr`, etc.). If it is missing, the router compiles without SSR support and silently skips the redirect.
-- The server must be able to read the cookie, which means enabling `leptos_i18n`'s `axum` or `actix` feature.
-
-This relies on `I18nContext::cookie_locale()`, which reports the locale stored in the cookie at initialization. Without the `cookie` feature there is never a cookie, so `AlwaysSplash` always renders the unprefixed view.
-
 ## Switching Locale
 
-Switching locale updates the prefix accordingly. Switching from `en` to `fr` will set the prefix to `fr`, but switching to the default locale will remove the locale prefix entirely (unless `prefix_default` is `PrefixDefault::Always` or `PrefixDefault::AlwaysSplash`, in which case the default locale keeps its prefix).
+Switching locale updates the prefix accordingly. Switching from `en` to `fr` will set the prefix to `fr`, but switching to the default locale will remove the locale prefix entirely (unless `prefix_default=PrefixDefault::Always`, in which case the default locale keeps its prefix).
 
 ## State Keeping
 
