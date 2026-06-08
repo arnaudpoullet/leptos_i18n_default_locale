@@ -543,10 +543,19 @@ fn redirect(path: String, permanent_redirect: bool) {
     fn redirect_via_comp(path: String) {
         let props = leptos::component::component_props_builder(&Redirect)
             .path(path)
+            .options(NavigateOptions {
+                replace: true,
+                ..Default::default()
+            })
             .build();
         Redirect(props)
     }
-    if permanent_redirect && cfg!(any(feature = "actix", feature = "axum")) {
+    if permanent_redirect
+        && cfg!(any(
+            all(feature = "actix", not(feature = "axum")),
+            all(feature = "axum", not(feature = "actix"))
+        ))
+    {
         #[cfg(all(feature = "axum", not(feature = "actix")))]
         {
             if let Some(res) = use_context::<leptos_axum::ResponseOptions>() {

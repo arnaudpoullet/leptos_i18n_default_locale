@@ -8,6 +8,9 @@ mod routing;
 
 pub use components::{I18nRoute, PrefixDefault};
 
+#[cfg(all(feature = "axum", feature = "actix"))]
+compile_error!("Both `axum` and `actix` features are enabled, please enable only one of them.");
+
 /// Create a localized path (one or more static segments) based on a locale.
 ///
 /// ```rust, ignore
